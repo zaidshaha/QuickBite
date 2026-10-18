@@ -1,58 +1,167 @@
-import { useEffect, useState } from "react";
-import { Route, Routes } from "react-router-dom";
 
+import { useEffect, useState } from "react";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Link,
+} from "react-router-dom";
 import Navbar from "./Components/Navbar.jsx";
 import Footer from "./Components/Footer.jsx";
-
 import Home from "./pages/Home.jsx";
-import Menu from "./pages/Menu.jsx";
-import Cart from "./pages/Cart.jsx";
-import Checkout from "./pages/Checkout.jsx";
-import Orders from "./pages/Orders.jsx";
+import { menuItems } from "./data/menu.js";
+import "./styles.css";
 
-function readStorage(key, fallback) {
-  try {
-    const saved = localStorage.getItem(key);
-    return saved ? JSON.parse(saved) : fallback;
-  } catch {
-    return fallback;
-  }
+function MenuPage({ addToCart }) {
+  return (
+    <main className="menu-section">
+      <span className="section-kicker">THE QUICKBITE MENU</span>
+      <h2>All your favourites.</h2>
+      <p>Choose your food and add it to your cart.</p>
+      <div className="food-grid">
+        {menuItems.map((item) => (
+          <div key={item.id}>
+            {/* Reuse the same card as the homepage */}
+            <MenuCard item={item} addToCart={addToCart} />
+          </div>
+        ))}
+      </div>
+    </main>
+  );
 }
 
-export default function App() {
-  const [cart, setCart] = useState(() =>
-    readStorage("quickbite-cart", [])
+function MenuCard({ item, addToCart }) {
+  const [failed, setFailed] = useState(false);
+
+  return (
+    <article className="food-card">
+      <div className="food-image">
+        {!failed && item.image ? (
+          <img
+            src={item.image}
+            alt={item.name}
+            onError={() => setFailed(true)}
+          />
+        ) : (
+          <div className="food-fallback">🍽️</div>
+        )}
+      </div>
+      <div className="food-info">
+        <span className="food-category">{item.category}</span>
+        <h3>{item.name}</h3>
+        <p>{item.description}</p>
+        <div className="food-bottom">
+          <strong>₹{item.price}</strong>
+          <button onClick={() => addToCart(item)}>+ Add</button>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function CartPage({ cart, changeQuantity, removeItem }) {
+  const total = cart.reduce(
+    (sum, item) => sum + item.price * item.quantity,
+    0
   );
 
-  const [orders, setOrders] = useState(() =>
-    readStorage("quickbite-orders", [])
+  return (
+    <main className="simple-page">
+      <span className="section-kicker">YOUR ORDER</span>
+      <h1>Your cart 🛒</h1>
+
+      {cart.length === 0 ? (
+        <>
+          <p>Your cart is empty. Let's find something delicious.</p>
+          <Link className="primary-button" to="/menu">
+            Explore Menu →
+          </Link>
+        </>
+      ) : (
+        <>
+          {cart.map((item) => (
+            <div className="cart-row" key={item.id}>
+              <div>
+                <h3>{item.name}</h3>
+                <p>₹{item.price} each</p>
+              </div>
+              <div className="quantity-controls">
+                <button onClick={() => changeQuantity(item.id, -1)}>
+                  −
+                </button>
+                <strong>{item.quantity}</strong>
+                <button onClick={() => changeQuantity(item.id, 1)}>
+                  +
+                </button>
+                <button
+                  className="remove-button"
+                  onClick={() => removeItem(item.id)}
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          ))}
+
+          <div className="cart-total">
+            <span>Total</span>
+            <strong>₹{total}</strong>
+          </div>
+          <p className="demo-note">
+            Demo website: no real payment will be collected.
+          </p>
+        </>
+      )}
+    </main>
   );
+}
+
+function OrdersPage() {
+  return (
+    <main className="simple-page">
+      <span className="section-kicker">QUICKBITE</span>
+      <h1>My Orders</h1>
+      <p>
+        This demo currently saves your cart, but does not submit
+        real orders to a canteen.
+      </p>
+      <Link to="/menu" className="primary-button">
+        Browse Menu →
+      </Link>
+    </main>
+  );
+}
+
+function AppContent() {
+  const [cart, setCart] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("quickbite-cart")) || [];
+    } catch {
+      return [];
+    }
+  });
 
   useEffect(() => {
     localStorage.setItem("quickbite-cart", JSON.stringify(cart));
   }, [cart]);
 
-  useEffect(() => {
-    localStorage.setItem("quickbite-orders", JSON.stringify(orders));
-  }, [orders]);
-
-  function addToCart(item) {
+  const addToCart = (item) => {
     setCart((current) => {
-      const existing = current.find((product) => product.id === item.id);
+      const existing = current.find((entry) => entry.id === item.id);
 
       if (existing) {
-        return current.map((product) =>
-          product.id === item.id
-            ? { ...product, quantity: product.quantity + 1 }
-            : product
+        return current.map((entry) =>
+          entry.id === item.id
+            ? { ...entry, quantity: entry.quantity + 1 }
+            : entry
         );
       }
 
       return [...current, { ...item, quantity: 1 }];
     });
-  }
+  };
 
-  function changeQuantity(id, amount) {
+  const changeQuantity = (id, amount) => {
     setCart((current) =>
       current
         .map((item) =>
@@ -62,96 +171,45 @@ export default function App() {
         )
         .filter((item) => item.quantity > 0)
     );
-  }
+  };
 
-  function removeFromCart(id) {
+  const removeItem = (id) => {
     setCart((current) => current.filter((item) => item.id !== id));
-  }
+  };
 
-  function placeOrder(customer) {
-    const newOrder = {
-      id: Date.now(),
-      customer,
-      items: cart,
-      total: cart.reduce(
-        (sum, item) => sum + item.price * item.quantity,
-        0
-      ),
-      date: new Date().toLocaleString(),
-      status: "Order placed",
-    };
-
-    setOrders((current) => [newOrder, ...current]);
-    setCart([]);
-    return newOrder.id;
-  }
-
-  const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-
-  const cartTotal = cart.reduce(
-    (sum, item) => sum + item.price * item.quantity,
+  const cartCount = cart.reduce(
+    (sum, item) => sum + item.quantity,
     0
   );
 
   return (
-    <div className="app">
+    <>
       <Navbar cartCount={cartCount} />
-
-      <main className="main-content">
-        <Routes>
-          <Route
-            path="/"
-            element={<Home addToCart={addToCart} />}
-          />
-
-          <Route
-            path="/menu"
-            element={<Menu addToCart={addToCart} />}
-          />
-
-          <Route
-            path="/cart"
-            element={
-              <Cart
-                cart={cart}
-                cartTotal={cartTotal}
-                changeQuantity={changeQuantity}
-                removeFromCart={removeFromCart}
-              />
-            }
-          />
-
-          <Route
-            path="/checkout"
-            element={
-              <Checkout
-                cart={cart}
-                cartTotal={cartTotal}
-                placeOrder={placeOrder}
-              />
-            }
-          />
-
-          <Route
-            path="/orders"
-            element={<Orders orders={orders} />}
-          />
-
-          <Route
-            path="*"
-            element={
-              <section className="empty-state">
-                <h2>Page not found</h2>
-                <a className="primary-button" href="/">
-                  Back to Home
-                </a>
-              </section>
-            }
-          />
-        </Routes>
-      </main>
-
+      <Routes>
+        <Route path="/" element={<Home addToCart={addToCart} />} />
+        <Route path="/menu" element={<MenuPage addToCart={addToCart} />} />
+        <Route
+          path="/cart"
+          element={
+            <CartPage
+              cart={cart}
+              changeQuantity={changeQuantity}
+              removeItem={removeItem}
+            />
+          }
+        />
+        <Route path="/orders" element={<OrdersPage />} />
+        <Route path="*" element={<Home addToCart={addToCart} />} />
+      </Routes>
       <Footer />
-    </div>
+    </>
+  );
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AppContent />
+    </BrowserRouter>
   );
 }
